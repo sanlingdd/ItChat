@@ -26,32 +26,24 @@ def get_chatroom():
         if chatrooms:
             return chatrooms[0]
         else:
-            try:
-                r = itchat.create_chatroom(itchat.get_friends()[1:4], topic=CHATROOM_NAME)
-                if r['BaseResponse']['ErrMsg'] == '':
-                    CHATROOM = {'UserName': r['ChatRoomName']}
-                    return CHATROOM
-            except Exception as e:
-                print(e.message, traceback.format_exc())                
+            print(e.message, traceback.format_exc())                
     else:
         return CHATROOM
-def get_friend_status(friend):
-    ownAccount = itchat.get_friends(update=True)[0]
+def get_friend_status(friend,ownAccount, chatroom):
     if friend['UserName'] == ownAccount['UserName']:
         return u'检测到本人账号。'
     elif itchat.search_friends(userName=friend['UserName']) is None:
         return u'该用户不在你的好友列表中。'
     else:
-        chatroom = CHATROOM or get_chatroom()
         if chatroom is None: return CHATROOM_MSG
         try:
             r = itchat.add_member_into_chatroom(chatroom['UserName'], [friend])
-            if r['BaseResponse']['ErrMsg'] == '':
+            if u'成功' in r['BaseResponse']['ErrMsg']:
                 status = r['MemberList'][0]['MemberStatus']
                 itchat.delete_member_from_chatroom(chatroom['UserName'], [friend])
-                return { 3: u'该好友已经将你加入黑名单。',
-                    4: u'该好友已经将你删除。', }.get(status,
-                    u'该好友仍旧与你是好友关系。')
+                return { 3: u'好友{}已经将你加入黑名单。'.format(friend['NickName']),
+                    4: u'好友{}已经将你删除。'.format(friend['NickName']), }.get(status,
+                    None)
             else:
                 return u'无法获取好友状态，预计已经达到接口调用限制。'
         except Exception as e:
@@ -60,8 +52,14 @@ def get_friend_status(friend):
 @itchat.msg_register(itchat.content.CARD)
 def get_friend(msg):
     if msg['ToUserName'] != 'filehelper': return
-    friendStatus = get_friend_status(msg['RecommendInfo'])
-    itchat.send(friendStatus, 'filehelper')
+    
+    friendList = itchat.get_friends(update=True)
+    ownAccount = friendList[0]
+    chatroom = CHATROOM or get_chatroom()
+    for friend in friendList[1:5]:
+            friendStatus = get_friend_status(friend,ownAccount,chatroom)
+            if friendStatus is not None:
+                itchat.send(friendStatus, 'filehelper')
 
 itchat.auto_login(True)
 itchat.send(HELP_MSG, 'filehelper')
